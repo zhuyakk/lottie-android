@@ -65,6 +65,25 @@ public class LottieDrawable extends Drawable implements Drawable.Callback {
     });
   }
 
+  public void animatorRepeatDelay(long timeInMilliSeconds){
+    animator.removeAllUpdateListeners();
+    float endValue = (float)(animator.getDuration() + timeInMilliSeconds)/animator.getDuration();
+    animator.setFloatValues(0f, endValue);
+    animator.setDuration(animator.getDuration() + timeInMilliSeconds);
+    animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+      @Override
+      public void onAnimationUpdate(ValueAnimator animation) {
+        float current = (float) animation.getAnimatedValue();
+        if (systemAnimationsAreDisabled) {
+          animator.cancel();
+          setProgress(1f);
+        } else if (current <= 1f){
+          setProgress(current);
+        }
+      }
+    });
+  }
+
   /**
    * Returns whether or not any layers in this composition has masks.
    */
@@ -351,7 +370,24 @@ public class LottieDrawable extends Drawable implements Drawable.Callback {
       animator.setDuration((long) (composition.getDuration() / Math.abs(speed)));
     }
   }
+  public void setIsLayerDraw(boolean isDraw){
+    if (compositionLayer != null){
+      compositionLayer.setIsLayerDraw(isDraw);
+    }
+  }
 
+  public void setMaxProgress(@FloatRange(from = 0f, to = 1f) float progress) {
+    if (compositionLayer != null) {
+      compositionLayer.setMaxProgress(progress);
+    }
+  }
+
+  public void resetProgress(){
+    this.progress = 0;
+    if (compositionLayer != null) {
+      compositionLayer.resetProgress();
+    }
+  }
   public void setProgress(@FloatRange(from = 0f, to = 1f) float progress) {
     this.progress = progress;
     if (compositionLayer != null) {
@@ -360,9 +396,21 @@ public class LottieDrawable extends Drawable implements Drawable.Callback {
   }
 
   public float getProgress() {
+    if (progress > 1f){
+      progress = 0f;
+    }
     return progress;
   }
 
+  /**
+   * Set the scale on the current composition. The only cost of this function is re-rendering the
+   * current frame so you may call it frequent to scale something up or down.
+   *
+   * The smaller the animation is, the better the performance will be. You may find that scaling an
+   * animation down then rendering it in a larger ImageView and letting ImageView scale it back up
+   * with a scaleType such as centerInside will yield better performance with little perceivable
+   * quality loss.
+   */
   @SuppressWarnings("WeakerAccess") public void setScale(float scale) {
     this.scale = scale;
     updateBounds();

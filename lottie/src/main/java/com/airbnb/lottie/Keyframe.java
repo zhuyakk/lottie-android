@@ -151,7 +151,7 @@ class Keyframe<T> {
       }
       List<Keyframe<T>> keyframes = new ArrayList<>();
       for (int i = 0; i < length; i++) {
-        keyframes.add(Keyframe.Factory.newInstance(json.optJSONObject(i), composition, scale,
+        keyframes.add(Factory.newInstance(json.optJSONObject(i), composition, scale,
             valueFactory));
       }
 

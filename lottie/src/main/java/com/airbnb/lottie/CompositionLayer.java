@@ -26,6 +26,14 @@ class CompositionLayer extends BaseLayer {
     for (int i = layerModels.size() - 1; i >= 0; i--) {
       Layer lm = layerModels.get(i);
       BaseLayer layer = BaseLayer.forModel(lm, lottieDrawable, composition);
+      if (layer == null){
+        continue;
+      }
+      layer.setProgressLayer(lm.isProgressLayer());
+      layer.setCanbeGone(lm.isCanbeGone());
+      layer.setMinDrawProgress(lm.getminProgress());
+      layer.setMaxDrawProgress(lm.getmaxProgress());
+
       layerMap.put(layer.getLayerModel().getId(), layer);
       if (mattedLayer != null) {
         mattedLayer.setMatteLayer(layer);
@@ -76,11 +84,34 @@ class CompositionLayer extends BaseLayer {
     }
   }
 
-  @Override public void setProgress(@FloatRange(from = 0f, to = 1f) float progress) {
+  public void setIsLayerDraw(boolean isDraw){
+    for (int i = layers.size() - 1; i >= 0 ; i --){
+      layers.get(i).setLayerVisible(isDraw);
+    }
+  }
+
+  @Override
+  public void setMaxProgress(@FloatRange(from = 0f, to = 1f) float progress) {
+    progress -= layerModel.getStartProgress();
+    for (int i = layers.size() - 1; i >= 0; i--) {
+      layers.get(i).setMaxProgress(progress);
+    }
+  }
+
+  @Override
+  public void setProgress(@FloatRange(from = 0f, to = 1f) float progress) {
     super.setProgress(progress);
     progress -= layerModel.getStartProgress();
     for (int i = layers.size() - 1; i >= 0; i--) {
       layers.get(i).setProgress(progress);
+    }
+  }
+
+  @Override
+  public void resetProgress() {
+    super.resetProgress();
+    for (int i = layers.size() - 1; i >= 0; i--) {
+      layers.get(i).resetProgress();
     }
   }
 

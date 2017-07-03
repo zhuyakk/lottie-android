@@ -21,6 +21,7 @@ abstract class BaseLayer implements DrawingContent, BaseKeyframeAnimation.Animat
   private static final int SAVE_FLAGS = Canvas.CLIP_SAVE_FLAG | Canvas.CLIP_TO_LAYER_SAVE_FLAG |
       Canvas.MATRIX_SAVE_FLAG;
 
+  @Nullable
   static BaseLayer forModel(
     Layer layerModel, LottieDrawable drawable, LottieComposition composition) {
     switch (layerModel.getLayerType()) {
@@ -40,7 +41,7 @@ abstract class BaseLayer implements DrawingContent, BaseKeyframeAnimation.Animat
       default:
         // Do nothing
         Log.w(L.TAG, "Unknown layer type " + layerModel.getLayerType());
-        return new NullLayer(drawable, layerModel);
+        return null;
     }
   }
 
@@ -65,6 +66,18 @@ abstract class BaseLayer implements DrawingContent, BaseKeyframeAnimation.Animat
   private final List<BaseKeyframeAnimation<?, ?>> animations = new ArrayList<>();
   final TransformKeyframeAnimation transform;
   private boolean visible = true;
+
+  private boolean isProgressLayer = false;//标识是否进度层
+  private float maxProgress = 1f;//记录进度层进度
+
+  private float progress = 0f;
+
+  //当json文件中标记这两个值时，只有当进度层的maxProgress在这两个值之间，该图层才被绘制
+  private float minDrawProgress = 0f;//进度满足的最小值
+  private float maxDrawProgress = 1f;//进度满足的最大值
+  private boolean progressNotDraw = false;//记录是否绘制当前图层,防止in/out anim覆盖掉结果
+
+  private boolean canbeGone = false;//标识当前图层是否可以被隐藏
 
   BaseLayer(LottieDrawable lottieDrawable, Layer layerModel) {
     this.lottieDrawable = lottieDrawable;
@@ -117,11 +130,16 @@ abstract class BaseLayer implements DrawingContent, BaseKeyframeAnimation.Animat
           new FloatKeyframeAnimation(layerModel.getInOutKeyframes());
       inOutAnimation.setIsDiscrete();
       inOutAnimation.addUpdateListener(new BaseKeyframeAnimation.AnimationListener() {
-        @Override public void onValueChanged() {
-          setVisible(inOutAnimation.getValue() == 1f);
+        @Override
+        public void onValueChanged() {
+          if (!progressNotDraw) {
+            setVisible(inOutAnimation.getValue() == 1f);
+          }
         }
       });
-      setVisible(inOutAnimation.getValue() == 1f);
+      if (!progressNotDraw) {
+        setVisible(inOutAnimation.getValue() == 1f);
+      }
       addAnimation(inOutAnimation);
     } else {
       setVisible(true);
@@ -169,8 +187,9 @@ abstract class BaseLayer implements DrawingContent, BaseKeyframeAnimation.Animat
     matrix.preConcat(transform.getMatrix());
     intersectBoundsWithMask(rect, matrix);
 
-    rect.set(0, 0, canvas.getWidth(), canvas.getHeight());
-
+    rect.set(0, 0, Utils.getScreenWidth(MoContext.getInstance().getContext()), Utils
+        .getScreenHeight(MoContext.getInstance().getContext()));
+    //rect.set(0, 0, canvas.getWidth(), canvas.getHeight());//TODO 使用canvas.getHeight canvas.getWidth拿到的图案可能绘制不全
     canvas.saveLayer(rect, contentPaint, Canvas.ALL_SAVE_FLAG);
     // Clear the off screen buffer. This is necessary for some phones.
     clearCanvas(canvas);
@@ -300,13 +319,103 @@ abstract class BaseLayer implements DrawingContent, BaseKeyframeAnimation.Animat
     }
   }
 
-  void setProgress(@FloatRange(from = 0f, to = 1f) float progress) {
+  void setLayerVisible(boolean visible) {
+    if (canbeGone && visible != this.visible) {
+      this.visible = visible;
+      invalidateSelf();
+    }
+  }
+
+  /** for initial*/
+  void setCanbeGone(boolean canbeGone){
+    this.canbeGone = canbeGone;
+  }
+
+  void setProgressLayer(boolean isProgressLayer){
+    this.isProgressLayer = isProgressLayer;
     if (matteLayer != null) {
-      matteLayer.setProgress(progress);
+      matteLayer.setProgressLayer(isProgressLayer);
     }
     for (int i = 0; i < animations.size(); i++) {
-      animations.get(i).setProgress(progress);
+      animations.get(i).setProgressLayer(isProgressLayer);
     }
+  }
+
+  void setMaxProgress(@FloatRange(from = 0f, to = 1f) float maxProgress) {
+
+    if (isProgressLayer) {
+      if (maxProgress == this.maxProgress){
+        return;
+      }
+
+      this.maxProgress = maxProgress;
+
+      if (matteLayer != null) {
+        matteLayer.setMaxProgress(maxProgress);
+      }
+      for (int i = 0; i < animations.size(); i++) {
+        animations.get(i).setMaxProgress(maxProgress);
+      }
+    }
+
+    if (maxProgress >= this.minDrawProgress && maxProgress <= this.maxDrawProgress){//正常
+      progressNotDraw = false;
+      setVisible(true);
+    }else {
+      progressNotDraw = true;
+      setVisible(false);
+    }
+  }
+
+  void resetProgress(){
+    this.progress = 0f;
+
+    if (matteLayer != null) {
+      matteLayer.resetProgress();
+    }
+    for (int i = 0; i < animations.size(); i++) {
+      animations.get(i).resetProgress();
+    }
+  }
+
+  void setProgress(@FloatRange(from = 0f, to = 1f) float progress) {
+    if (isProgressLayer) {
+      if (this.progress > this.maxProgress){//实际进度比max大,立刻刷新
+        setRealProgress(this.maxProgress);
+        return;
+      }
+
+      if (progress > this.maxProgress) {//最多走到max进度
+        if (this.progress < this.maxProgress){//如果progress已经最大了,this.progress还没到max，直接赋值为最大
+          setRealProgress(this.maxProgress);
+        }
+        return;
+      }
+
+      if (this.progress > progress){//走到指定进度后不再动画
+        return;
+      }
+    }
+
+   setRealProgress(progress);
+  }
+
+  private void setRealProgress(@FloatRange(from = 0f, to = 1f) float progress){
+    this.progress = progress;
+
+    if (matteLayer != null) {
+      matteLayer.setProgress(this.progress);
+    }
+    for (int i = 0; i < animations.size(); i++) {
+      animations.get(i).setProgress(this.progress);
+    }
+  }
+
+  void setMinDrawProgress(float minDrawProgress){
+    this.minDrawProgress = minDrawProgress;
+  }
+  void setMaxDrawProgress(float maxDrawProgress){
+    this.maxDrawProgress = maxDrawProgress;
   }
 
   private void buildParentLayerListIfNeeded() {

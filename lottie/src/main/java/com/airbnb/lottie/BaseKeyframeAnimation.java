@@ -21,7 +21,11 @@ abstract class BaseKeyframeAnimation<K, A> {
   private final List<? extends Keyframe<K>> keyframes;
   private float progress = 0f;
 
-  @Nullable private Keyframe<K> cachedKeyframe;
+  private boolean isProgressLayer = false;
+  private float maxProgress = 1f;
+
+  @Nullable
+  private Keyframe<K> cachedKeyframe;
 
   BaseKeyframeAnimation(List<? extends Keyframe<K>> keyframes) {
     this.keyframes = keyframes;
@@ -35,6 +39,16 @@ abstract class BaseKeyframeAnimation<K, A> {
     listeners.add(listener);
   }
 
+  void setProgressLayer(boolean isProgressLayer){
+    this.isProgressLayer = isProgressLayer;
+  }
+
+  void setMaxProgress(@FloatRange(from = 0f, to = 1f) float progress){
+    if (this.isProgressLayer) {
+      maxProgress = progress;
+    }
+  }
+
   void setProgress(@FloatRange(from = 0f, to = 1f) float progress) {
     if (progress < getStartDelayProgress()) {
       progress = 0f;
@@ -42,14 +56,40 @@ abstract class BaseKeyframeAnimation<K, A> {
       progress = 1f;
     }
 
+    if (isProgressLayer) {
+      if (this.progress > this.maxProgress){//当前的progress比最大的还大，设置当前为最大的
+        setRealProgress(this.maxProgress);
+        return;
+      }
+
+      if (progress > this.maxProgress) {//只能走到指定进度
+        if (this.progress < this.maxProgress){//如果progress已经比max大了,this.progress还没到max
+          setRealProgress(this.maxProgress);
+        }
+        return;
+      }
+
+      if (progress < this.progress){//走到指定进度后不再更新
+        return;
+      }
+    }
+
     if (progress == this.progress) {
       return;
     }
+    setRealProgress(progress);
+  }
+
+  private void setRealProgress(@FloatRange(from = 0f, to = 1f) float progress){
     this.progress = progress;
 
     for (int i = 0; i < listeners.size(); i++) {
       listeners.get(i).onValueChanged();
     }
+  }
+
+  void resetProgress(){
+    setRealProgress(0f);
   }
 
   private Keyframe<K> getCurrentKeyframe() {

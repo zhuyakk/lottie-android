@@ -16,7 +16,7 @@ class ShapeGroup {
 
     switch (type) {
       case "gr":
-        return ShapeGroup.Factory.newInstance(json, composition);
+        return Factory.newInstance(json, composition);
       case "st":
         return ShapeStroke.Factory.newInstance(json, composition);
       case "gs":

@@ -39,7 +39,8 @@ class Layer {
   private final long layerId;
   private final LayerType layerType;
   private final long parentId;
-  @Nullable private final String refId;
+  @Nullable
+  private final String refId;
   private final List<Mask> masks;
   private final AnimatableTransform transform;
   private final int solidWidth;
@@ -51,12 +52,18 @@ class Layer {
   private final int preCompHeight;
   private final List<Keyframe<Float>> inOutKeyframes;
   private final MatteType matteType;
+  private final boolean isProgressLayer;
+  private final boolean canbeGone;
+  private final float minProgress;
+  private final float maxProgress;
+
 
   private Layer(List<Object> shapes, LottieComposition composition, String layerName, long layerId,
-      LayerType layerType, long parentId, @Nullable String refId, List<Mask> masks,
-      AnimatableTransform transform, int solidWidth, int solidHeight, int solidColor,
-      float timeStretch, float startProgress, int preCompWidth, int preCompHeight,
-      List<Keyframe<Float>> inOutKeyframes, MatteType matteType) {
+                LayerType layerType, long parentId, @Nullable String refId, List<Mask> masks,
+                AnimatableTransform transform, int solidWidth, int solidHeight, int solidColor,
+                float timeStretch, float startProgress, int preCompWidth, int preCompHeight,
+                List<Keyframe<Float>> inOutKeyframes, MatteType matteType, boolean isProgressLayer, boolean canbeGone,
+                float minProgress, float maxProgress) {
     this.shapes = shapes;
     this.composition = composition;
     this.layerName = layerName;
@@ -75,6 +82,10 @@ class Layer {
     this.preCompHeight = preCompHeight;
     this.inOutKeyframes = inOutKeyframes;
     this.matteType = matteType;
+    this.isProgressLayer = isProgressLayer;
+    this.canbeGone = canbeGone;
+    this.minProgress = minProgress;
+    this.maxProgress = maxProgress;
   }
 
   LottieComposition getComposition() {
@@ -87,6 +98,18 @@ class Layer {
 
   float getStartProgress() {
     return startProgress;
+  }
+  boolean isProgressLayer(){
+    return this.isProgressLayer;
+  }
+  boolean isCanbeGone(){
+    return this.canbeGone;
+  }
+  float getminProgress() {
+    return minProgress;
+  }
+  float getmaxProgress() {
+    return maxProgress;
   }
 
   List<Keyframe<Float>> getInOutKeyframes() {
@@ -101,7 +124,8 @@ class Layer {
     return layerName;
   }
 
-  @Nullable String getRefId() {
+  @Nullable
+  String getRefId() {
     return refId;
   }
 
@@ -149,7 +173,8 @@ class Layer {
     return solidWidth;
   }
 
-  @Override public String toString() {
+  @Override
+  public String toString() {
     return toString("");
   }
 
@@ -194,13 +219,18 @@ class Layer {
           Collections.<Mask>emptyList(), AnimatableTransform.Factory.newInstance(),
           0, 0, 0, 0, 0,
           bounds.width(), bounds.height(), Collections.<Keyframe<Float>>emptyList(), MatteType
-          .None);
+          .None, false, false,0f,1f);
     }
 
     static Layer newInstance(JSONObject json, LottieComposition composition) {
       String layerName = json.optString("nm");
       String refId = json.optString("refId");
       long layerId = json.optLong("ind");
+      boolean isProgressLayer = json.optBoolean("isProgress", false);
+      boolean canbeGone = json.optBoolean("canbeGone", false);
+      float minProgress = (float) json.optDouble("minProgress", 0f);
+      float maxProgress = (float) json.optDouble("maxProgress", 1f);
+      boolean hasAnim = json.optBoolean("hasAnim", true);
       int solidWidth = 0;
       int solidHeight = 0;
       int solidColor = 0;
@@ -260,30 +290,32 @@ class Layer {
         preCompHeight = (int) (json.optInt("h") * composition.getDpScale());
       }
 
-      float inFrame = json.optLong("ip");
-      float outFrame = json.optLong("op");
+      if (hasAnim){
+        float inFrame = json.optLong("ip");
+        float outFrame = json.optLong("op");
 
-      // Before the in frame
-      if (inFrame > 0) {
-        Keyframe<Float> preKeyframe = new Keyframe<>(composition, 0f, 0f, null, 0f, inFrame);
-        inOutKeyframes.add(preKeyframe);
-      }
+        // Before the in frame
+        if (inFrame > 0) {
+          Keyframe<Float> preKeyframe = new Keyframe<>(composition, 0f, 0f, null, 0f, inFrame);
+          inOutKeyframes.add(preKeyframe);
+        }
 
-      // The + 1 is because the animation should be visible on the out frame itself.
-      outFrame = (outFrame > 0 ? outFrame : composition.getEndFrame() + 1);
-      Keyframe<Float> visibleKeyframe =
-          new Keyframe<>(composition, 1f, 1f, null, inFrame, outFrame);
-      inOutKeyframes.add(visibleKeyframe);
+        // The + 1 is because the animation should be visible on the out frame itself.
+        outFrame = (outFrame > 0 ? outFrame : composition.getEndFrame() + 1);
+        Keyframe<Float> visibleKeyframe =
+            new Keyframe<>(composition, 1f, 1f, null, inFrame, outFrame);
+        inOutKeyframes.add(visibleKeyframe);
 
-      if (outFrame <= composition.getDurationFrames()) {
-        Keyframe<Float> outKeyframe =
-            new Keyframe<>(composition, 0f, 0f, null, outFrame, (float) composition.getEndFrame());
-        inOutKeyframes.add(outKeyframe);
+        if (outFrame <= composition.getDurationFrames()) {
+          Keyframe<Float> outKeyframe =
+              new Keyframe<>(composition, 0f, 0f, null, outFrame, (float) composition.getEndFrame());
+          inOutKeyframes.add(outKeyframe);
+        }
       }
 
       return new Layer(shapes, composition, layerName, layerId, layerType, parentId, refId,
           masks, transform, solidWidth, solidHeight, solidColor, timeStretch, startProgress,
-          preCompWidth, preCompHeight, inOutKeyframes, matteType);
+          preCompWidth, preCompHeight, inOutKeyframes, matteType, isProgressLayer, canbeGone, minProgress, maxProgress);
     }
   }
 }

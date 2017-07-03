@@ -82,7 +82,12 @@ class GradientFillContent implements DrawingContent, BaseKeyframeAnimation.Anima
     path.computeBounds(boundsRect, false);
 
     if (type == GradientType.Linear) {
-      paint.setShader(getLinearGradient());
+      LinearGradient shader = getLinearGradient();
+      Matrix shaderMatrix = new Matrix();
+      shader.getLocalMatrix(shaderMatrix);
+      shaderMatrix.preConcat(parentMatrix);
+      shader.setLocalMatrix(shaderMatrix);
+      paint.setShader(shader);
     } else {
       paint.setShader(getRadialGradient());
     }
@@ -121,6 +126,7 @@ class GradientFillContent implements DrawingContent, BaseKeyframeAnimation.Anima
     int gradientHash = getGradientHash();
     LinearGradient gradient = linearGradientCache.get(gradientHash);
     if (gradient != null) {
+      gradient.setLocalMatrix(new Matrix());
       return gradient;
     }
     PointF startPoint = startPointAnimation.getValue();
@@ -128,10 +134,14 @@ class GradientFillContent implements DrawingContent, BaseKeyframeAnimation.Anima
     GradientColor gradientColor = colorAnimation.getValue();
     int[] colors = gradientColor.getColors();
     float[] positions = gradientColor.getPositions();
-    int x0 = (int) (boundsRect.left + boundsRect.width() / 2 + startPoint.x);
-    int y0 = (int) (boundsRect.top + boundsRect.height() / 2 + startPoint.y);
-    int x1 = (int) (boundsRect.left + boundsRect.width() / 2 + endPoint.x);
-    int y1 = (int) (boundsRect.top + boundsRect.height() / 2 + endPoint.y);
+//    int x0 = (int) (boundsRect.left + boundsRect.width() / 2 + startPoint.x);
+//    int y0 = (int) (boundsRect.top + boundsRect.height() / 2 + startPoint.y);
+//    int x1 = (int) (boundsRect.left + boundsRect.width() / 2 + endPoint.x);
+//    int y1 = (int) (boundsRect.top + boundsRect.height() / 2 + endPoint.y);
+    int x0 = (int) (startPoint.x);
+    int y0 = (int) (startPoint.y);
+    int x1 = (int) (endPoint.x);
+    int y1 = (int) (endPoint.y);
     gradient = new LinearGradient(x0, y0, x1, y1, colors, positions, Shader.TileMode.CLAMP);
     linearGradientCache.put(gradientHash, gradient);
     return gradient;

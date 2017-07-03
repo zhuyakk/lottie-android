@@ -4,6 +4,7 @@ import android.animation.Animator;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.TypedArray;
+import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
@@ -11,6 +12,7 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.provider.Settings;
 import android.support.annotation.FloatRange;
+import android.support.annotation.Keep;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.VisibleForTesting;
@@ -69,8 +71,9 @@ public class LottieAnimationView extends AppCompatImageView {
   private final LottieDrawable lottieDrawable = new LottieDrawable();
   private CacheStrategy defaultCacheStrategy;
   private String animationName;
-  private boolean wasAnimatingWhenDetached = false;
-  private boolean autoPlay = false;
+//  private boolean wasAnimatingWhenDetached = false;
+//  private boolean autoPlay = false;
+  private boolean useHardwareLayer = false;
 
   @Nullable private Cancellable compositionLoader;
   /**
@@ -78,18 +81,22 @@ public class LottieAnimationView extends AppCompatImageView {
    */
   @Nullable private LottieComposition composition;
 
+  @Keep
   public LottieAnimationView(Context context) {
     super(context);
+    MoContext.getInstance().setContext(context);
     init(null);
   }
 
   public LottieAnimationView(Context context, AttributeSet attrs) {
     super(context, attrs);
+    MoContext.getInstance().setContext(context);
     init(attrs);
   }
 
   public LottieAnimationView(Context context, AttributeSet attrs, int defStyleAttr) {
     super(context, attrs, defStyleAttr);
+    MoContext.getInstance().setContext(context);
     init(attrs);
   }
 
@@ -99,12 +106,15 @@ public class LottieAnimationView extends AppCompatImageView {
     if (!isInEditMode() && fileName != null) {
       setAnimation(fileName);
     }
-    if (ta.getBoolean(R.styleable.LottieAnimationView_lottie_autoPlay, false)) {
-      lottieDrawable.playAnimation();
-      autoPlay = true;
-    }
+//    if (ta.getBoolean(R.styleable.LottieAnimationView_lottie_autoPlay, false)) {
+//      lottieDrawable.playAnimation();
+//      autoPlay = true;
+//    }
     lottieDrawable.loop(ta.getBoolean(R.styleable.LottieAnimationView_lottie_loop, false));
-    setImageAssetsFolder(ta.getString(R.styleable.LottieAnimationView_lottie_imageAssetsFolder));
+    String imgFolder = ta.getString(R.styleable.LottieAnimationView_lottie_imageAssetsFolder);
+    if (TextUtils.isEmpty(imgFolder)) {
+      setImageAssetsFolder(imgFolder);
+    }
     setProgress(ta.getFloat(R.styleable.LottieAnimationView_lottie_progress, 0));
     enableMergePathsForKitKatAndAbove(ta.getBoolean(
         R.styleable.LottieAnimationView_lottie_enableMergePathsForKitKatAndAbove, false));
@@ -112,6 +122,10 @@ public class LottieAnimationView extends AppCompatImageView {
         R.styleable.LottieAnimationView_lottie_cacheStrategy,
         CacheStrategy.None.ordinal());
     defaultCacheStrategy = CacheStrategy.values()[cacheStrategy];
+    if (ta.hasValue(R.styleable.LottieAnimationView_lottie_colorFilter)) {
+      addColorFilter(new SimpleColorFilter(ta.getColor(
+              R.styleable.LottieAnimationView_lottie_colorFilter, Color.TRANSPARENT)));
+    }
     ta.recycle();
     setLayerType(LAYER_TYPE_SOFTWARE, null);
 
@@ -122,14 +136,17 @@ public class LottieAnimationView extends AppCompatImageView {
         lottieDrawable.systemAnimationsAreDisabled();
       }
     }
+    enableOrDisableHardwareLayer();
   }
 
-  @Override public void setImageResource(int resId) {
+  @Override
+  public void setImageResource(int resId) {
     super.setImageResource(resId);
     recycleBitmaps();
   }
 
-  @Override public void setImageDrawable(Drawable drawable) {
+  @Override
+  public void setImageDrawable(Drawable drawable) {
     if (drawable != lottieDrawable) {
       recycleBitmaps();
     }
@@ -142,8 +159,8 @@ public class LottieAnimationView extends AppCompatImageView {
    * @param contentName name of the specific content that the color filter is to be applied
    * @param colorFilter the color filter, null to clear the color filter
    */
-  public void addColorFilterToContent(String layerName, String contentName,
-      @Nullable ColorFilter colorFilter) {
+  @SuppressWarnings("unused") public void addColorFilterToContent(String layerName, String contentName,
+                                      @Nullable ColorFilter colorFilter) {
     lottieDrawable.addColorFilterToContent(layerName, contentName, colorFilter);
   }
 
@@ -152,7 +169,7 @@ public class LottieAnimationView extends AppCompatImageView {
    * @param layerName name of the layer that the color filter is to be applied
    * @param colorFilter the color filter, null to clear the color filter
    */
-  public void addColorFilterToLayer(String layerName, @Nullable ColorFilter colorFilter) {
+  @SuppressWarnings("unused") public void addColorFilterToLayer(String layerName, @Nullable ColorFilter colorFilter) {
     lottieDrawable.addColorFilterToLayer(layerName, colorFilter);
   }
 
@@ -167,11 +184,12 @@ public class LottieAnimationView extends AppCompatImageView {
   /**
    * Clear all color filters on all layers and all content in the layers
    */
-  public void clearColorFilters() {
+  @SuppressWarnings("unused") public void clearColorFilters() {
     lottieDrawable.clearColorFilters();
   }
 
-  @Override public void invalidateDrawable(@NonNull Drawable dr) {
+  @Override
+  public void invalidateDrawable(@NonNull Drawable dr) {
     if (getDrawable() == lottieDrawable) {
       // We always want to invalidate the root drawable to it redraws the whole drawable.
       // Eventually it would be great to be able to invalidate just the changed region.
@@ -182,7 +200,8 @@ public class LottieAnimationView extends AppCompatImageView {
     }
   }
 
-  @Override protected Parcelable onSaveInstanceState() {
+  @Override
+  protected Parcelable onSaveInstanceState() {
     Parcelable superState = super.onSaveInstanceState();
     SavedState ss = new SavedState(superState);
     ss.animationName = animationName;
@@ -192,7 +211,8 @@ public class LottieAnimationView extends AppCompatImageView {
     return ss;
   }
 
-  @Override protected void onRestoreInstanceState(Parcelable state) {
+  @Override
+  protected void onRestoreInstanceState(Parcelable state) {
     if (!(state instanceof SavedState)) {
       super.onRestoreInstanceState(state);
       return;
@@ -211,23 +231,26 @@ public class LottieAnimationView extends AppCompatImageView {
     }
   }
 
-  @Override protected void onAttachedToWindow() {
-    super.onAttachedToWindow();
-    if (autoPlay && wasAnimatingWhenDetached) {
-      playAnimation();
-    }
-  }
+//  @Override
+//  protected void onAttachedToWindow() {
+//    super.onAttachedToWindow();
+//    if (autoPlay && wasAnimatingWhenDetached) {
+//      playAnimation();
+//    }
+//  }
+//
+//  @Override
+//  protected void onDetachedFromWindow() {
+//    if (isAnimating()) {
+//      cancelAnimation();
+//      wasAnimatingWhenDetached = true;
+//    }
+//    recycleBitmaps();
+//    super.onDetachedFromWindow();
+//  }
 
-  @Override protected void onDetachedFromWindow() {
-    if (isAnimating()) {
-      cancelAnimation();
-      wasAnimatingWhenDetached = true;
-    }
-    recycleBitmaps();
-    super.onDetachedFromWindow();
-  }
-
-  @VisibleForTesting void recycleBitmaps() {
+  @VisibleForTesting
+  void recycleBitmaps() {
     // AppCompatImageView constructor will set the image when set from xml
     // before LottieDrawable has been initialized
     if (lottieDrawable != null) {
@@ -248,6 +271,13 @@ public class LottieAnimationView extends AppCompatImageView {
   }
 
   /**
+   * @see #useExperimentalHardwareAcceleration(boolean)
+   */
+  @SuppressWarnings({"WeakerAccess", "unused"}) public void useExperimentalHardwareAcceleration() {
+    useExperimentalHardwareAcceleration(true);
+  }
+
+  /**
    * Enable hardware acceleration for this view.
    * READ THIS BEFORE ENABLING HARDWARE ACCELERATION:
    * 1) Test your animation on the minimum API level you support. Some drawing features such as
@@ -259,8 +289,10 @@ public class LottieAnimationView extends AppCompatImageView {
    *    potentially break hardware rendering with bugs in their SKIA engine. Lottie cannot do
    *    anything about that.
    */
-  @SuppressWarnings({"WeakerAccess", "unused"}) public void useExperimentalHardwareAcceleration() {
-    setLayerType(LAYER_TYPE_HARDWARE, null);
+  @SuppressWarnings({"WeakerAccess", "unused"})
+  public void useExperimentalHardwareAcceleration(boolean use) {
+    useHardwareLayer = use;
+    enableOrDisableHardwareLayer();
   }
 
   /**
@@ -374,6 +406,14 @@ public class LottieAnimationView extends AppCompatImageView {
     requestLayout();
   }
 
+  public boolean isSameComposition(LottieComposition composition){
+    if (this.composition == composition){
+      return true;
+    }else{
+      return false;
+    }
+  }
+
   /**
    * Returns whether or not any layers in this composition has masks.
    */
@@ -428,18 +468,28 @@ public class LottieAnimationView extends AppCompatImageView {
 
   public void playAnimation() {
     lottieDrawable.playAnimation();
+    enableOrDisableHardwareLayer();
+  }
+
+    /** 为两次动画间增加时间间隔 在setComposition之后设置
+     之前设置的updateListener会失效*/
+  public void animatorRepeatDelay(long delayInMilliseconds){
+    lottieDrawable.animatorRepeatDelay(delayInMilliseconds);
   }
 
   public void resumeAnimation() {
     lottieDrawable.resumeAnimation();
+    enableOrDisableHardwareLayer();
   }
 
   @SuppressWarnings("unused") public void reverseAnimation() {
     lottieDrawable.reverseAnimation();
+    enableOrDisableHardwareLayer();
   }
 
   @SuppressWarnings("unused") public void resumeReverseAnimation() {
     lottieDrawable.resumeReverseAnimation();
+    enableOrDisableHardwareLayer();
   }
 
   @SuppressWarnings("unused") public void setSpeed(float speed) {
@@ -455,6 +505,15 @@ public class LottieAnimationView extends AppCompatImageView {
     lottieDrawable.setImageAssetDelegate(assetDelegate);
   }
 
+  /**
+   * Set the scale on the current composition. The only cost of this function is re-rendering the
+   * current frame so you may call it frequent to scale something up or down.
+   *
+   * The smaller the animation is, the better the performance will be. You may find that scaling an
+   * animation down then rendering it in a larger ImageView and letting ImageView scale it back up
+   * with a scaleType such as centerInside will yield better performance with little perceivable
+   * quality loss.
+   */
   void setScale(float scale) {
     lottieDrawable.setScale(scale);
     if (getDrawable() == lottieDrawable) {
@@ -465,12 +524,25 @@ public class LottieAnimationView extends AppCompatImageView {
 
   public void cancelAnimation() {
     lottieDrawable.cancelAnimation();
+    enableOrDisableHardwareLayer();
   }
 
   public void pauseAnimation() {
     float progress = getProgress();
     lottieDrawable.cancelAnimation();
     setProgress(progress);
+    enableOrDisableHardwareLayer();
+  }
+
+  public void resetProgress(){
+    lottieDrawable.resetProgress();
+  }
+
+  public void setMaxProgress(@FloatRange(from = 0f, to = 1f) float progress) {
+    lottieDrawable.setMaxProgress(progress);
+  }
+  public void setIsLayerDraw(boolean isDraw) {
+    lottieDrawable.setIsLayerDraw(isDraw);
   }
 
   public void setProgress(@FloatRange(from = 0f, to = 1f) float progress) {
@@ -483,6 +555,11 @@ public class LottieAnimationView extends AppCompatImageView {
 
   @SuppressWarnings("unused") public long getDuration() {
     return composition != null ? composition.getDuration() : 0;
+  }
+
+  private void enableOrDisableHardwareLayer() {
+    boolean useHardwareLayer = this.useHardwareLayer && lottieDrawable.isAnimating();
+    setLayerType(useHardwareLayer ? LAYER_TYPE_HARDWARE : LAYER_TYPE_SOFTWARE, null);
   }
 
   private static class SavedState extends BaseSavedState {
@@ -513,8 +590,8 @@ public class LottieAnimationView extends AppCompatImageView {
 
     }
 
-    public static final Parcelable.Creator<SavedState> CREATOR =
-        new Parcelable.Creator<SavedState>() {
+    public static final Creator<SavedState> CREATOR =
+        new Creator<SavedState>() {
           public SavedState createFromParcel(Parcel in) {
             return new SavedState(in);
           }

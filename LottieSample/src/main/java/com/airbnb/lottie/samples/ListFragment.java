@@ -70,6 +70,11 @@ public class ListFragment extends Fragment {
     startActivity(i);
   }
 
+  private void onOpenLottieTest(){
+    Intent i = new Intent(getContext(), XposedDemo.class);
+    startActivity(i);
+  }
+
   private void showFragment(Fragment fragment) {
     getFragmentManager().beginTransaction()
         .addToBackStack(null)
@@ -84,7 +89,7 @@ public class ListFragment extends Fragment {
     private static final String TAG_TYPOGRAPHY = "typography";
     private static final String TAG_APP_INTRO = "app_intro";
     private static final String TAG_OPEN_LOTTIE_FILES = "open_lottie_files";
-
+    private static final String TAG_OPEN_LOTTIE_TEST = "open_lottie_test";
     @Override
     public StringViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
       return new StringViewHolder(parent);
@@ -105,12 +110,15 @@ public class ListFragment extends Fragment {
         case 3:
           holder.bind("Open lottiefiles.com", TAG_OPEN_LOTTIE_FILES);
           break;
+        case 4:
+          holder.bind("open Lottie Test", TAG_OPEN_LOTTIE_TEST);
+          break;
       }
     }
 
     @Override
     public int getItemCount() {
-      return 4;
+      return 5;
     }
   }
 
@@ -138,6 +146,8 @@ public class ListFragment extends Fragment {
             onAppIntroPagerClicked();
           } else if (FileAdapter.TAG_OPEN_LOTTIE_FILES.equals(v.getTag())) {
             onOpenLottieFilesClicked();
+          } else if (FileAdapter.TAG_OPEN_LOTTIE_TEST.equals(v.getTag())){
+            onOpenLottieTest();
           }
         }
       });
